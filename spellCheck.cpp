@@ -13,11 +13,13 @@
 #include <fstream>
 #include "corrector.h"
 
-#define MADE_UP_WORD_PENALTY 50
 #define AVERAGE_WORD_LEN 6
-#define ACCEPTABLE_FREQ 300
 
 #define MAX_BUF 4096
+#define cmd_begin "0BEGIN.0"
+#define cmd_wait "__wait__"
+#define cmd_close  "__close__"
+#define cmd_eoph "__eoph__"
 
 int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     sqlite3 *db)
@@ -54,48 +56,6 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     (*bigramList)->reverse();
     return count;
 }
-
-/*void fillBigramSet( std::unordered_map<std::string, int> ** bigramSet,
-    std::string first, sqlite3 * db)
-{
-    std::string statement;
-    int rc;
-    sqlite3_stmt * ppStmt;
-    
-    statement = "SELECT * FROM Bigrams\nWHERE First='" + first + "'";
-    rc = sqlite3_prepare_v2( db, statement.c_str(), statement.length() + 1, 
-        &ppStmt, NULL);
-    
-    if(sqlite3_step(ppStmt) != SQLITE_ROW)
-    {
-        (*bigramSet) = NULL;
-        return;
-    }
-    
-    (*bigramSet) = new std::unordered_map<std::string, int>();
-    
-    do
-    {
-        int score = sqlite3_column_int(ppStmt, 2);
-        const unsigned char * sec = sqlite3_column_text(ppStmt, 1);
-        std::string second = std::string((char *)sec);
-        (*bigramSet)->insert({second, score});
-    } while (sqlite3_step(ppStmt) == SQLITE_ROW);
-    std::locale loc;
-    std::string lf = std::tolower(first, loc);
-    if (lf == first)
-        return;
-    statement = "SELECT * FROM Bigrams\nWHERE First='" + lf + "'";
-    rc = sqlite3_prepare_v2( db, statement.c_str(), statement.length() + 1, 
-        &ppStmt, NULL);
-    while (sqlite3_step(ppStmt) == SQLITE_ROW)
-    {
-        int score = sqlite3_column_int(ppStmt, 2);
-        const unsigned char * sec = sqlite3_column_text(ppStmt, 1);
-        std::string second = std::string((char *)sec);
-        (*bigramSet)->insert({second, score});
-    }
-}*/
 
 std::string bestBigram(std::string first, std::string second, corrector * corr, 
     sqlite3 * db)
@@ -135,8 +95,8 @@ int validWordCount( std::string word, corrector * corr )
     return count;
 }
 
-/*double scoreBigrams( std::string phrase, std::string first, corrector * corr, 
-    std::unordered_map<std::string, void *> * bigramSets, sqlite3 * db )
+/*double scoreBigrams( std::string phrase, std::string first, corrector * corr,
+std::unordered_map<std::string, void *> * bigramSets, sqlite3 * db )
 {
     std::string word;
     std::unordered_map<std::string, int> * bigramSet;
@@ -150,9 +110,8 @@ int validWordCount( std::string word, corrector * corr )
             fillBigramSet( &bigramSet, first, db);
             bigramSets->insert({first, bigramSet});
         }
-        
-        bigramSet = (std::unordered_map<std::string, int> *) 
-            bigramSets->at(first);
+        bigramSet = (std::unordered_map<std::string, int> *)
+        bigramSets->at(first);
         if (bigramSet != NULL)
         {
             if (bigramSet->count(word))
@@ -166,7 +125,8 @@ int validWordCount( std::string word, corrector * corr )
     return penalty;
 }*/
 
-std::string Viterbi( std::string text, corrector * corr)
+std::string Viterbi( std::string text, corrector * corr, 
+    double made_up_word_penalty, int acceptable_freq)
 {
     int n = text.length();
     std::vector<std::string> words = std::vector<std::string>(n + 1, "");
@@ -180,7 +140,7 @@ std::string Viterbi( std::string text, corrector * corr)
         {
             std::string word = text.substr(j, i-j);
             int w = word.length();
-            double p = -1*MADE_UP_WORD_PENALTY;
+            double p = -1*made_up_word_penalty;
             if (w > AVERAGE_WORD_LEN)
             {
                 p = p*w/AVERAGE_WORD_LEN;
@@ -190,11 +150,11 @@ std::string Viterbi( std::string text, corrector * corr)
             {
                 p = log(count) - log(corr->getNWords());
             }
-            if (count < ACCEPTABLE_FREQ)
+            if (count < acceptable_freq)
             {
                 std::list<entry> * wordList = new std::list<entry>();
                 corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
-                    ACCEPTABLE_FREQ, 1);
+                    acceptable_freq, 1);
                 if ((wordList != NULL)&&(!wordList->empty()))
                 {
                     entry e = wordList->front();
@@ -231,6 +191,67 @@ std::string Viterbi( std::string text, corrector * corr)
     return sequence;
 }
 
+std::string correct(std::string input, double confidence, corrector * corr,
+    std::string first, sqlite3 * db)
+{
+    std::cout<<"a "<<confidence<<std::endl;
+    //int correctCase;
+    std::locale loc;
+    std::cout<<"b "<<corr->getWordFreq(input)<<std::endl;
+    if (corr->getWordFreq(input))
+    {
+        std::cout<<"word found 1"<<std::endl;
+        if (confidence < 90) //TODO: find good threshold
+        {
+            if (first == cmd_begin)
+            {
+                std::list<entry> wordList = std::list<entry>();
+                corr->fillPossibleWordListLin(&wordList, input, -20);
+                if (!wordList.empty())
+                {
+                    entry e = wordList.front();
+                    input = e.str;
+                }
+            }
+            else
+            {
+                input = bestBigram(first, input, corr, db);
+            }
+        }
+        std::cout<<"word found 2"<<std::endl;
+        return input;
+    }
+    std::cout<<"c"<<std::endl;
+    std::list<entry> wordList = std::list<entry>();
+    corr->fillPossibleWordListLin(&wordList, input, -20);
+    std::cout<<"d"<<std::endl;
+    if (!wordList.empty())
+    {
+        entry e = wordList.front();
+        if (e.d > -50) //TODO: find good threshold
+        {
+            std::cout<<"score "<<e.d<<std::endl;
+            return e.str;
+        }
+    }
+    std::cout<<"e"<<std::endl;
+    double made_up_word_penalty;
+    if (isupper(input[0]))
+    {
+        made_up_word_penalty = (100 - confidence)*1.5;
+    }
+    else
+    {
+        made_up_word_penalty = (100 - confidence)*3;
+    }
+    std::cout<<"made up word penalty "<<made_up_word_penalty<<std::endl;
+    int acceptable_freq = 300;
+    std::cout<<"f"<<std::endl;
+    input = Viterbi(input, corr, made_up_word_penalty, acceptable_freq);
+    std::cout<<"g"<<std::endl;
+    return input;
+}
+
 int main()
 {
     std::string input;
@@ -239,26 +260,37 @@ int main()
     
     corrector * corr = new corrector();
     
-    std::string cFile = "Training/PrideAndPrejudice/PrideAndPrejudice.txt";
-    std::string tFile = "Training/PrideAndPrejudice/tess2.txt";
+    std::string cFile = "../Training/PrideAndPrejudice/PrideAndPrejudice.txt";
+    std::string tFile = "../Training/PrideAndPrejudice/tess2.txt";
     
-    corr->loadDictionary("Dictionary/unigrams.txt");
-    corr->loadErrors("trained5.txt");
+    corr->loadDictionary("../Dictionary/unigrams.txt");
+    corr->loadErrors("../trained5.txt");
     //corr->learn(tFile, cFile);
     //std::cout<<"learned"<<std::endl;
     //corr->writeErrors("trained5.txt");
     
-    std::list<entry> * wordList;
+    sqlite3 *db;
+    int rc;
+    rc = sqlite3_open("../Dictionary/BigramDatabase.db", &db);
+    if (rc)
+    {
+        std::cout<<"Can't open database"<<std::endl;
+        return 1;
+    }
+    
+    std::string first = "0BEGIN.0";
+    double confidence;
     
     while (std::cin>>input)
     {
+        std::cin>>confidence;
         //wordList = new std::list<entry>();
         
         //corr->fillPossibleWordListLin(wordList, input, -20);
         
         //entry e = wordList->front();
         
-        output = Viterbi(input, corr);
+        output = correct(input, confidence, corr, first, db);
         //score = e.d;
         std::cout<<"returned"<<std::endl;
         
@@ -272,12 +304,7 @@ int main()
 }
 
 int main2()
-{
-    std::string cmd_begin = "0BEGIN.0";
-    std::string cmd_wait = "__wait__";
-    std::string cmd_close = "__close__";
-    std::string cmd_eoph = "__eoph__";
-    
+{    
     std::string first = cmd_begin;
     std::string input;
     double confidence;
@@ -331,64 +358,7 @@ int main2()
         
         in>>confidence;
         
-        int correctCase;
-        if ((correctCase = corr->getWordFreq(input)) || 
-            (corr->getWordFreq(std::tolower(input, loc))))
-        {
-            if (confidence > 90) //TODO: find good threshold
-            {
-                
-            }
-            else if (correctCase)
-            {
-                input = bestBigram(first, input, corr, db);
-            }
-            else
-            {
-                input = bestBigram(first, std::tolower(input, loc), corr, db);
-            }
-            do {
-                written = write(outfd, input.c_str(), 
-                    (input.length())*sizeof(char));
-            } while (written == -1);
-            
-            first = input;
-            
-            continue;
-        }
         
-        std::list<entry> wordList = std::list<entry>();
-        corr->fillPossibleWordListLin(&wordList, input, -20);
-        if (wordList.empty())
-        {
-            std::string lower = std::tolower(input, loc);
-            if (lower != input)
-            {
-                corr->fillPossibleWordListLin(&wordList, lower, -20);
-            }
-        }
-        if (!wordList.empty())
-        {
-            entry e = wordList.front();
-            if (e.d > -50) //TODO: find good threshold
-            {
-                do {
-                    written = write(outfd, e.str.c_str(), 
-                        (e.str.length())*sizeof(char));
-                } while (written == -1);
-                continue;
-            }
-        }
-        double made_up_word_penalty;
-        if (isupper(input[0]))
-        {
-            made_up_word_penalty = -1*(100 - confidence)*1.5;
-        }
-        else
-        {
-            made_up_word_penalty = -1*(100 - confidence)*3;
-        }
-        int acceptable_freq = 300;
     }
 }
 

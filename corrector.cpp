@@ -31,6 +31,7 @@ void corrector::loadErrors(std::string filename)
 	int nObserved;
 	double percent;
 	int pos;
+	int count = 0;
 	while(getline(fs, line))
 	{
 		std::stringstream sLine (line);
@@ -54,7 +55,9 @@ void corrector::loadErrors(std::string filename)
 		}
 		error_item item (lp, nObserved);
 		errors->insert({tStr, item});
+		count++;
 	}
+	std::cout<<"read "<<count<<" lines from "<<filename<<std::endl;
 }
 
 void corrector::writeErrors(std::string filename)
@@ -188,6 +191,10 @@ void corrector::addWord(std::string word, int score)
 
 void corrector::addError(std::string tString, std::string cString)
 {
+    if (tString.length() == 0)
+        return;
+    if (cString.length() == 0)
+        return;
 	if (errors->count(tString))
 	{
 		error_item item = errors->at(tString);
@@ -687,7 +694,7 @@ void corrector::fillPossibleWordListLin( std::list<entry> * wordList,
     std::list<dictEntry> * choices, double wordPenalty,
     std::string word, double maxErr, int forcedMinFreq, int allowedMinFreq)
 {
-    double bestFound = maxErr;
+    double bestFound = maxErr - log(nWords);
     if (word.length() < 1)
         return;
     do_fillPossibleWordList( wordList, word, maxErr, forcedMinFreq,
@@ -699,10 +706,11 @@ void corrector::fillPossibleWordListLin( std::list<entry> * wordList,
     int maxLenDev)
 {
     int len = word.length();
-    double bestFound = maxErr;
+    double bestFound = maxErr - log(nWords);
     if (len < 1)
         return;
     double wordPenalty = log(nWords);
+    
     if (len <= dictionary->size())
     {
         do_fillPossibleWordList( wordList, word, maxErr, forcedMinFreq, 
