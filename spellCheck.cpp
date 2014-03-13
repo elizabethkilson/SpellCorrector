@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <fstream>
+#include <time.h>
 #include "corrector.h"
 
 #define AVERAGE_WORD_LEN 6
@@ -57,6 +58,56 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     return count;
 }
 
+void fillBigramSet( std::unordered_map<std::string, int> ** bigramSet,
+    std::string first, sqlite3 * db)
+{
+    clock_t t;
+    t = clock();
+    std::string statement;
+    int rc;
+    sqlite3_stmt * ppStmt;
+    
+    statement = "SELECT * FROM Bigrams\nWHERE First='" + first + "'";
+    rc = sqlite3_prepare_v2( db, statement.c_str(), statement.length() + 1, 
+        &ppStmt, NULL);
+    
+    if(sqlite3_step(ppStmt) != SQLITE_ROW)
+    {
+        (*bigramSet) = NULL;
+        return;
+    }
+    
+    (*bigramSet) = new std::unordered_map<std::string, int>();
+    
+    do
+    {
+        int score = sqlite3_column_int(ppStmt, 2);
+        const unsigned char * sec = sqlite3_column_text(ppStmt, 1);
+        std::string second = std::string((char *)sec);
+        (*bigramSet)->insert({second, score});
+    } while (sqlite3_step(ppStmt) == SQLITE_ROW);
+    
+    t = clock() - t;
+    
+    std::cout<<"time to load bigram set for "<<first<<": "<<
+        ((float)t)/CLOCKS_PER_SEC<<std::endl;
+    
+    /*std::locale loc;
+    std::string lf = std::tolower(first, loc);
+    if (lf == first)
+        return;
+    statement = "SELECT * FROM Bigrams\nWHERE First='" + lf + "'";
+    rc = sqlite3_prepare_v2( db, statement.c_str(), statement.length() + 1, 
+        &ppStmt, NULL);
+    while (sqlite3_step(ppStmt) == SQLITE_ROW)
+    {
+        int score = sqlite3_column_int(ppStmt, 2);
+        const unsigned char * sec = sqlite3_column_text(ppStmt, 1);
+        std::string second = std::string((char *)sec);
+        (*bigramSet)->insert({second, score});
+    }*/
+}
+
 std::string bestBigram(std::string first, std::string second, corrector * corr, 
     sqlite3 * db)
 {
@@ -95,39 +146,228 @@ int validWordCount( std::string word, corrector * corr )
     return count;
 }
 
-/*double scoreBigrams( std::string phrase, std::string first, corrector * corr,
-std::unordered_map<std::string, void *> * bigramSets, sqlite3 * db )
+double scoreBigram( std::string first, std::string second, corrector * corr,
+    std::unordered_map<std::string, void *> * bigramSets, sqlite3 * db )
 {
     std::string word;
     std::unordered_map<std::string, int> * bigramSet;
-    std::stringstream sLine(phrase);
-    double bgPenalty = -20; //TODO: find appropriate
-    double penalty = 0;
-    while (sLine>>word)
+    
+    double score = 0;
+    if (!bigramSets->count(first))
     {
-        if (!bigramSets->count(first))
-        {
-            fillBigramSet( &bigramSet, first, db);
-            bigramSets->insert({first, bigramSet});
-        }
-        bigramSet = (std::unordered_map<std::string, int> *)
+        fillBigramSet( &bigramSet, first, db);
+        bigramSets->insert({first, bigramSet});
+    }
+    bigramSet = (std::unordered_map<std::string, int> *)
         bigramSets->at(first);
-        if (bigramSet != NULL)
+    if (bigramSet != NULL)
+    {
+        if (bigramSet->count(second))
         {
-            if (bigramSet->count(word))
+            score += log(bigramSet->at(second) + 1);
+        }
+    }
+    
+    return score;
+}
+
+void Viterbi2_update_vectors(std::vector<std::vector<std::string>> * words,
+    std::vector<std::vector<double>>* best, std::vector<std::vector<int>>* lens,
+    double p, std::string word, int w, int i, int storage_num)
+{
+    for (int k = storage_num - 1; k > 0; k++)
+    {
+        if (p < (*best)[i][k - 1])
+        {
+            (*best)[i][k] = p;
+            (*words)[i][k] = word;
+            (*lens)[i][k] = w;
+            break;
+        }
+        (*best)[i][k] = (*best)[i][k - 1];
+        (*words)[i][k] = (*words)[i][k - 1];
+        (*lens)[i][k] = (*lens)[i][k - 1];
+    }
+    if (!(p < (*best)[i][0]))
+    {
+        (*best)[i][0] = p;
+        (*words)[i][0] = word;
+        (*lens)[i][0] = w;
+    }
+}
+
+void Viterbi2_unwrap_string(std::vector<std::vector<std::string>> * words,
+    std::vector<std::vector<double>>* best, std::vector<std::vector<int>>* lens,
+    std::list<std::string> * output, int storage_num, 
+    std::vector<int> * indices)
+{
+    int i = indices->size() - 1;
+    int j = words->size() - 1;
+    for (; (j > 0)&&(i >= 0); i--)
+    {
+        output->push_front((*words)[j][indices->at(i)]);
+        j -= (*lens)[j][indices->at(i)];
+    }
+    while (j > 0)
+    {
+        output->push_front((*words)[j][0]);
+        j -= (*lens)[j][0];
+    }
+}
+
+std::string Viterbi2_create_sequence(std::list<std::string> * words)
+{
+    std::string sequence = "";
+    std::list<std::string>::iterator it = words->begin();
+    for (; it != words->end(); ++it)
+    {
+        sequence += (*it);
+    }
+}
+
+std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db, 
+    double made_up_word_penalty, int acceptable_freq, int storage_num)
+{
+    clock_t t;
+    t = clock();
+    int n = text.length();
+    std::vector<std::vector<std::string>> words = 
+        std::vector<std::vector<std::string>>(n + 1, 
+        std::vector<std::string>(storage_num, ""));
+    words[0][0] = text;
+    std::vector<std::vector<double>> best = std::vector<std::vector<double>> 
+        (n + 1, std::vector<double>(storage_num, -3000.0));
+    std::vector<std::vector<int>> lens = 
+        std::vector<std::vector<int>>(n + 1, std::vector<int>(storage_num, n));
+    best[0][0] = 0.0;
+    for (int i = 0; i < n + 1; i++)
+    {
+        for (int j = 0; j < i; j++)
+        {
+            std::string word = text.substr(j, i-j);
+            int w = word.length();
+            double p = -1*made_up_word_penalty;
+            if (w > AVERAGE_WORD_LEN)
             {
-                penalty += log(bigramSet->at(word) + 1);
+                p = p*w/AVERAGE_WORD_LEN;
+            }
+            if (p > best[i][storage_num - 1])
+            {
+                Viterbi2_update_vectors(&words, &best, &lens, 
+                    p, word, w, i, storage_num);
+            }
+            int count;
+            if (count = corr->getWordFreq(word))
+            {
+                p = log(count) - log(corr->getNWords());
+                p += best[i - w][0];
+                if (p > best[i][storage_num - 1])
+                {
+                    Viterbi2_update_vectors(&words, &best, &lens, 
+                        p, word, w, i, storage_num);
+                }
+            }
+            std::list<entry> * wordList = new std::list<entry>();
+            corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
+                acceptable_freq, 1);
+            if ((wordList != NULL)&&(!wordList->empty()))
+            {
+                std::list<entry>::iterator it = wordList->begin();
+                while ((p = (it->d + best[i - w][0]) > best[i][storage_num - 1])
+                    && (it != wordList->end()))
+                {
+                    if (word == it->str)
+                        continue;
+                    Viterbi2_update_vectors(&words, &best, &lens, 
+                        p, it->str, w, i, storage_num);
+                }
+                ++it;
+            }
+            delete wordList;
+        }
+    }
+    
+    std::list<std::string> results = std::list<std::string>();
+    
+    std::vector<int> indices = std::vector<int>(n, 0);
+    
+    Viterbi2_unwrap_string(&words, &best, &lens, &results, 
+        storage_num, &indices);
+    
+    std::unordered_map<std::string, void *> bigramSets = 
+        std::unordered_map<std::string, void *>();
+    
+    std::list<std::vector<int>> indices_list = std::list<std::vector<int>>();
+    
+    indices_list.push_front(std::vector<int>(results.size(), 0));
+    
+    while (!indices_list.empty())
+    {
+        indices = indices_list.front();
+        indices_list.pop_front();
+        
+        results = std::list<std::string>();
+        Viterbi2_unwrap_string(&words, &best, &lens, &results, 
+            storage_num, &indices);
+        
+        if (results.empty())
+            continue;
+        
+        std::list<std::string>::iterator it = --(--results.end());
+        std::list<std::string>::iterator it2 = --results.begin();
+        bool bigrams_found = true;
+        for (int i = indices.size() - 1; it2 != results.begin();
+            --it, --it2, --i)
+        {
+            double score = scoreBigram( (*it), (*it2), corr, &bigramSets, db );
+            bigrams_found = bigrams_found && (score > 0);
+            if (!score)
+            {
+                std::vector<int> new_indices = indices;
+                if (new_indices[i] < storage_num - 1)
+                {
+                    new_indices[i]++;
+                    indices_list.push_back(new_indices);
+                    new_indices[i]--;
+                }
+                if (((i - 1) > 0) && 
+                    (new_indices[i - 1] < storage_num - 1))
+                {
+                    new_indices[i - 1]++;
+                    indices_list.push_back(new_indices);
+                }
             }
         }
-        penalty += bgPenalty;
-        first = word;
+        if (bigrams_found)
+        {
+            t = clock() - t;
+    
+            std::cout<<"time for Viterbi2: "<<
+                ((float)t)/CLOCKS_PER_SEC<<std::endl;
+                
+            return Viterbi2_create_sequence(&results);
+        }
     }
-    return penalty;
-}*/
+    
+    results = std::list<std::string>();
+    
+    indices = std::vector<int>(n, 0);
+    
+    Viterbi2_unwrap_string(&words, &best, &lens, &results, 
+        storage_num, &indices);
+    
+    t = clock() - t;
+
+    std::cout<<"time for Viterbi2: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
+    
+    return Viterbi2_create_sequence(&results);
+}
 
 std::string Viterbi( std::string text, corrector * corr, 
     double made_up_word_penalty, int acceptable_freq)
 {
+    clock_t t;
+    t = clock();
     int n = text.length();
     std::vector<std::string> words = std::vector<std::string>(n + 1, "");
     words[0] = text;
@@ -188,6 +428,11 @@ std::string Viterbi( std::string text, corrector * corr,
         //std::cout<<lens[i]<<std::endl;
         i = i - lens[i];
     }
+    
+    t = clock() - t;
+    
+    std::cout<<"time for Viterbi: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
+    
     return sequence;
 }
 
