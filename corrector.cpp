@@ -563,7 +563,7 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
     std::string word, double maxErr, int forcedMinFreq, int * allowedMinFreq, 
     std::list<dictEntry> * dictList, double * bestFound, double wordPenalty)
 {
-    //std::cout<<"do_start"<<std::endl;
+    std::cout<<"do_start"<<std::endl;
     if (dictList == NULL)
         return;
     //std::cout<<"dictList not null"<<std::endl;
@@ -582,9 +582,12 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
             break;
         std::string dictWord = it->str;
         std::string common = LCS(word, dictWord);
-        //std::cout<<"b"<<std::endl;
-        if (common.length() < std::max(dictWord.length(), word.length())/2 - 1)
-            continue;
+        if ((dictWord.length() > 1) || (word.length() > 1))
+        {
+            if (common.length() < 
+                std::max(dictWord.length(), word.length())/2)
+                continue;
+        }
         double penalty = 0;
         i = 0;
         j = 0;
@@ -653,8 +656,6 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
             //std::cout<<"h"<<std::endl;
         }
         
-        //std::cout<<dictWord<<" "<<penalty<<std::endl;
-        
         if (penalty <= maxErr)
             continue;
         
@@ -699,6 +700,9 @@ void corrector::fillPossibleWordListLin( std::list<entry> * wordList,
         return;
     do_fillPossibleWordList( wordList, word, maxErr, forcedMinFreq,
         &allowedMinFreq, choices, &bestFound, wordPenalty);
+    
+    wordList->sort();
+    wordList->reverse();
 }
 
 void corrector::fillPossibleWordListLin( std::list<entry> * wordList, 

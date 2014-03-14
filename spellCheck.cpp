@@ -42,7 +42,6 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     (*bigramList) = new std::list<dictEntry>();
     
     int count = 0;
-    
     do
     {
         int score = sqlite3_column_int(ppStmt, 2);
@@ -51,7 +50,12 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
         std::string second = std::string((char *)sec);
         dictEntry de = dictEntry(second, score);
         (*bigramList)->push_back(de);
-    } while (sqlite3_step(ppStmt) == SQLITE_ROW);
+    } while (rc = (sqlite3_step(ppStmt) == SQLITE_ROW));
+    
+    if ((rc != SQLITE_DONE)&&(rc != SQLITE_OK))
+    {
+        std::cout<<"Error reading bigram list "<<rc<<std::endl;
+    }
     
     (*bigramList)->sort();
     (*bigramList)->reverse();
@@ -120,8 +124,15 @@ std::string bestBigram(std::string first, std::string second, corrector * corr,
     
     std::list<entry> wordList = std::list<entry>();
     
+    double maxErr = -20;
+    int len;
+    if ((len = second.length()) > (2*AVERAGE_WORD_LEN))
+    {
+        maxErr = maxErr * len / (2*AVERAGE_WORD_LEN);
+    }
+    
     corr->fillPossibleWordListLin(&wordList, bigramList, log(count), 
-        second, -20);
+        second, maxErr);
     
     if (wordList.empty())
         return second;
@@ -147,19 +158,22 @@ int validWordCount( std::string word, corrector * corr )
 }
 
 double scoreBigram( std::string first, std::string second, corrector * corr,
-    std::unordered_map<std::string, void *> * bigramSets, sqlite3 * db )
+    std::unordered_map<std::string, std::unordered_map<std::string, int> *> 
+    * bigramSets, sqlite3 * db )
 {
     std::string word;
     std::unordered_map<std::string, int> * bigramSet;
-    
     double score = 0;
     if (!bigramSets->count(first))
     {
         fillBigramSet( &bigramSet, first, db);
         bigramSets->insert({first, bigramSet});
     }
-    bigramSet = (std::unordered_map<std::string, int> *)
-        bigramSets->at(first);
+    if (!bigramSets->count(first))
+    {
+        return 0;
+    }
+    bigramSet = bigramSets->at(first);
     if (bigramSet != NULL)
     {
         if (bigramSet->count(second))
@@ -167,7 +181,6 @@ double scoreBigram( std::string first, std::string second, corrector * corr,
             score += log(bigramSet->at(second) + 1);
         }
     }
-    
     return score;
 }
 
@@ -175,25 +188,22 @@ void Viterbi2_update_vectors(std::vector<std::vector<std::string>> * words,
     std::vector<std::vector<double>>* best, std::vector<std::vector<int>>* lens,
     double p, std::string word, int w, int i, int storage_num)
 {
-    for (int k = storage_num - 1; k > 0; k++)
+    //std::cout<<"update "<<word<<" "<<p<<std::endl;
+    int k = storage_num - 1;
+    for (; k > 0; k--)
     {
         if (p < (*best)[i][k - 1])
         {
-            (*best)[i][k] = p;
-            (*words)[i][k] = word;
-            (*lens)[i][k] = w;
             break;
         }
         (*best)[i][k] = (*best)[i][k - 1];
         (*words)[i][k] = (*words)[i][k - 1];
         (*lens)[i][k] = (*lens)[i][k - 1];
     }
-    if (!(p < (*best)[i][0]))
-    {
-        (*best)[i][0] = p;
-        (*words)[i][0] = word;
-        (*lens)[i][0] = w;
-    }
+    
+    (*best)[i][k] = p;
+    (*words)[i][k] = word;
+    (*lens)[i][k] = w;
 }
 
 void Viterbi2_unwrap_string(std::vector<std::vector<std::string>> * words,
@@ -217,12 +227,14 @@ void Viterbi2_unwrap_string(std::vector<std::vector<std::string>> * words,
 
 std::string Viterbi2_create_sequence(std::list<std::string> * words)
 {
-    std::string sequence = "";
     std::list<std::string>::iterator it = words->begin();
+    std::string sequence = (*it);
+    ++it;
     for (; it != words->end(); ++it)
     {
-        sequence += (*it);
+        sequence += " " + (*it);
     }
+    return sequence;
 }
 
 std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db, 
@@ -240,10 +252,12 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
     std::vector<std::vector<int>> lens = 
         std::vector<std::vector<int>>(n + 1, std::vector<int>(storage_num, n));
     best[0][0] = 0.0;
+    std::cout<<"a "<<std::endl;
     for (int i = 0; i < n + 1; i++)
     {
         for (int j = 0; j < i; j++)
         {
+            //std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
             std::string word = text.substr(j, i-j);
             int w = word.length();
             double p = -1*made_up_word_penalty;
@@ -253,6 +267,13 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
             }
             if (p > best[i][storage_num - 1])
             {
+                if (p > 0)
+                {
+                    std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
+                    std::cout<<"1 score "<<p<<
+                        " prev "<<best[i - w][0]<<std::endl;
+                }
+                p += best[i - w][0];
                 Viterbi2_update_vectors(&words, &best, &lens, 
                     p, word, w, i, storage_num);
             }
@@ -261,6 +282,12 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
             {
                 p = log(count) - log(corr->getNWords());
                 p += best[i - w][0];
+                if (p > 0)
+                {
+                    std::cout<<"2 i "<<i<<" j "<<j<<std::endl;
+                    std::cout<<"2 score "<<log(count) - log(corr->getNWords())<<
+                        " prev "<<best[i - w][0]<<std::endl;
+                }
                 if (p > best[i][storage_num - 1])
                 {
                     Viterbi2_update_vectors(&words, &best, &lens, 
@@ -268,16 +295,25 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
                 }
             }
             std::list<entry> * wordList = new std::list<entry>();
-            corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
+            corr->fillPossibleWordListLin(wordList, word, -20, 3000, 
                 acceptable_freq, 1);
             if ((wordList != NULL)&&(!wordList->empty()))
             {
                 std::list<entry>::iterator it = wordList->begin();
-                while ((p = (it->d + best[i - w][0]) > best[i][storage_num - 1])
+                while (((p = (it->d + best[i - w][0])) > best[i][storage_num - 1])
                     && (it != wordList->end()))
                 {
+                    if (p > 0)
+                    {
+                        std::cout<<"3 i "<<i<<" j "<<j<<std::endl;
+                        std::cout<<"3 score "<<it->d<<" prev "<<
+                            best[i - w][0]<<std::endl;
+                    }
                     if (word == it->str)
+                    {
+                        ++it;
                         continue;
+                    }
                     Viterbi2_update_vectors(&words, &best, &lens, 
                         p, it->str, w, i, storage_num);
                 }
@@ -286,7 +322,7 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
             delete wordList;
         }
     }
-    
+    //std::cout<<"a "<<std::endl;
     std::list<std::string> results = std::list<std::string>();
     
     std::vector<int> indices = std::vector<int>(n, 0);
@@ -294,15 +330,17 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
     Viterbi2_unwrap_string(&words, &best, &lens, &results, 
         storage_num, &indices);
     
-    std::unordered_map<std::string, void *> bigramSets = 
-        std::unordered_map<std::string, void *>();
+    std::unordered_map<std::string, std::unordered_map<std::string, int> *> 
+        bigramSets = std::unordered_map<std::string, 
+        std::unordered_map<std::string, int> *>();
     
     std::list<std::vector<int>> indices_list = std::list<std::vector<int>>();
     
     indices_list.push_front(std::vector<int>(results.size(), 0));
-    
+    //std::cout<<"b "<<std::endl;
     while (!indices_list.empty())
     {
+        //std::cout<<"c "<<std::endl;
         indices = indices_list.front();
         indices_list.pop_front();
         
@@ -312,15 +350,18 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
         
         if (results.empty())
             continue;
-        
+        //std::cout<<"d "<<std::endl;
         std::list<std::string>::iterator it = --(--results.end());
-        std::list<std::string>::iterator it2 = --results.begin();
+        std::list<std::string>::iterator it2 = --results.end();
         bool bigrams_found = true;
         for (int i = indices.size() - 1; it2 != results.begin();
             --it, --it2, --i)
         {
+            //std::cout<<"1 i "<<i<<std::endl;
             double score = scoreBigram( (*it), (*it2), corr, &bigramSets, db );
+            //std::cout<<"2 "<<std::endl;
             bigrams_found = bigrams_found && (score > 0);
+            //std::cout<<"3 "<<std::endl;
             if (!score)
             {
                 std::vector<int> new_indices = indices;
@@ -337,9 +378,11 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
                     indices_list.push_back(new_indices);
                 }
             }
+            //std::cout<<"4 "<<std::endl;
         }
         if (bigrams_found)
         {
+            std::cout<<"bigrams found"<<std::endl;
             t = clock() - t;
     
             std::cout<<"time for Viterbi2: "<<
@@ -393,7 +436,7 @@ std::string Viterbi( std::string text, corrector * corr,
             if (count < acceptable_freq)
             {
                 std::list<entry> * wordList = new std::list<entry>();
-                corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
+                corr->fillPossibleWordListLin(wordList, word, -20, 3000, 
                     acceptable_freq, 1);
                 if ((wordList != NULL)&&(!wordList->empty()))
                 {
@@ -490,9 +533,9 @@ std::string correct(std::string input, double confidence, corrector * corr,
         made_up_word_penalty = (100 - confidence)*3;
     }
     std::cout<<"made up word penalty "<<made_up_word_penalty<<std::endl;
-    int acceptable_freq = 300;
+    int acceptable_freq = 800;
     std::cout<<"f"<<std::endl;
-    input = Viterbi(input, corr, made_up_word_penalty, acceptable_freq);
+    input = Viterbi2(input, corr, db, made_up_word_penalty, acceptable_freq, 4);
     std::cout<<"g"<<std::endl;
     return input;
 }
@@ -528,7 +571,7 @@ int main()
     
     while (std::cin>>input)
     {
-        std::cin>>confidence;
+        confidence = 89;
         //wordList = new std::list<entry>();
         
         //corr->fillPossibleWordListLin(wordList, input, -20);
@@ -536,10 +579,11 @@ int main()
         //entry e = wordList->front();
         
         output = correct(input, confidence, corr, first, db);
-        //score = e.d;
         std::cout<<"returned"<<std::endl;
-        
         std::cout<<output<<std::endl;
+        
+        std::stringstream ss (output);
+        while (ss>>first);
         
         //delete wordList;
     }
@@ -602,6 +646,8 @@ int main2()
         } while (written == -1);
         
         in>>confidence;
+        
+        input = correct(input, confidence, corr, first, db);
         
         
     }
