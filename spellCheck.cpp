@@ -257,7 +257,7 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
     {
         for (int j = 0; j < i; j++)
         {
-            //std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
+            std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
             std::string word = text.substr(j, i-j);
             int w = word.length();
             double p = -1*made_up_word_penalty;
@@ -265,50 +265,36 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
             {
                 p = p*w/AVERAGE_WORD_LEN;
             }
+            std::cout<<"b "<<std::endl;
             if (p > best[i][storage_num - 1])
             {
-                if (p > 0)
-                {
-                    std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
-                    std::cout<<"1 score "<<p<<
-                        " prev "<<best[i - w][0]<<std::endl;
-                }
                 p += best[i - w][0];
                 Viterbi2_update_vectors(&words, &best, &lens, 
                     p, word, w, i, storage_num);
             }
             int count;
+            std::cout<<"c "<<std::endl;
             if (count = corr->getWordFreq(word))
             {
                 p = log(count) - log(corr->getNWords());
                 p += best[i - w][0];
-                if (p > 0)
-                {
-                    std::cout<<"2 i "<<i<<" j "<<j<<std::endl;
-                    std::cout<<"2 score "<<log(count) - log(corr->getNWords())<<
-                        " prev "<<best[i - w][0]<<std::endl;
-                }
                 if (p > best[i][storage_num - 1])
                 {
                     Viterbi2_update_vectors(&words, &best, &lens, 
                         p, word, w, i, storage_num);
                 }
             }
+            std::cout<<"d "<<std::endl;
             std::list<entry> * wordList = new std::list<entry>();
-            corr->fillPossibleWordListLin(wordList, word, -20, 3000, 
+            corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
                 acceptable_freq, 1);
+            std::cout<<"e "<<std::endl;
             if ((wordList != NULL)&&(!wordList->empty()))
             {
                 std::list<entry>::iterator it = wordList->begin();
                 while (((p = (it->d + best[i - w][0])) > best[i][storage_num - 1])
                     && (it != wordList->end()))
                 {
-                    if (p > 0)
-                    {
-                        std::cout<<"3 i "<<i<<" j "<<j<<std::endl;
-                        std::cout<<"3 score "<<it->d<<" prev "<<
-                            best[i - w][0]<<std::endl;
-                    }
                     if (word == it->str)
                     {
                         ++it;
@@ -319,10 +305,11 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
                 }
                 ++it;
             }
+            std::cout<<"f "<<std::endl;
             delete wordList;
         }
     }
-    //std::cout<<"a "<<std::endl;
+    std::cout<<"a2 "<<std::endl;
     std::list<std::string> results = std::list<std::string>();
     
     std::vector<int> indices = std::vector<int>(n, 0);
@@ -337,7 +324,7 @@ std::string Viterbi2( std::string text, corrector * corr, sqlite3 * db,
     std::list<std::vector<int>> indices_list = std::list<std::vector<int>>();
     
     indices_list.push_front(std::vector<int>(results.size(), 0));
-    //std::cout<<"b "<<std::endl;
+    std::cout<<"b "<<std::endl;
     while (!indices_list.empty())
     {
         //std::cout<<"c "<<std::endl;
@@ -436,7 +423,7 @@ std::string Viterbi( std::string text, corrector * corr,
             if (count < acceptable_freq)
             {
                 std::list<entry> * wordList = new std::list<entry>();
-                corr->fillPossibleWordListLin(wordList, word, -20, 3000, 
+                corr->fillPossibleWordListLin(wordList, word, -20, 1000, 
                     acceptable_freq, 1);
                 if ((wordList != NULL)&&(!wordList->empty()))
                 {
@@ -569,14 +556,17 @@ int main()
     std::string first = "0BEGIN.0";
     double confidence;
     
-    while (std::cin>>input)
-    {
+    std::cin>>input;
+    
+    //while (std::cin>>input)
+    //{
         confidence = 89;
         //wordList = new std::list<entry>();
         
         //corr->fillPossibleWordListLin(wordList, input, -20);
         
         //entry e = wordList->front();
+        
         
         output = correct(input, confidence, corr, first, db);
         std::cout<<"returned"<<std::endl;
@@ -586,9 +576,9 @@ int main()
         while (ss>>first);
         
         //delete wordList;
-    }
+    //}
     
-    
+    delete corr;
     return 0;
 }
 

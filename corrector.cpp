@@ -137,6 +137,8 @@ void corrector::loadDictionary(std::string filename)
 	
 	std::list<dictEntry> * wordList;
 	
+	int count = 0;
+	
 	while(getline(fs, line))
 	{
 	    std::stringstream sLine (line);
@@ -155,6 +157,7 @@ void corrector::loadDictionary(std::string filename)
 		wordList->push_back(dictEntry(word, score));
 		dictionaryMap->insert({word, score});
 		nWords+=score;
+		count++;
 	}
 	
 	for (int i = 0; i < dictionary->size(); i++)
@@ -166,6 +169,8 @@ void corrector::loadDictionary(std::string filename)
 	        wordList->reverse();
 	    }
 	}
+	
+	std::cout<<"read "<<count<<" lines from "<<filename<<std::endl;
 }
 
 void corrector::addWord(std::string word, int score)
@@ -563,7 +568,7 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
     std::string word, double maxErr, int forcedMinFreq, int * allowedMinFreq, 
     std::list<dictEntry> * dictList, double * bestFound, double wordPenalty)
 {
-    std::cout<<"do_start"<<std::endl;
+    //std::cout<<"do_start"<<std::endl;
     if (dictList == NULL)
         return;
     //std::cout<<"dictList not null"<<std::endl;
@@ -581,14 +586,33 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
         if ((score < (*allowedMinFreq)) && (score < forcedMinFreq))
             break;
         std::string dictWord = it->str;
-        std::string common = LCS(word, dictWord);
-        if ((dictWord.length() > 1) || (word.length() > 1))
+        double penalty = 0;
+        
+        if (word == dictWord)
         {
-            if (common.length() < 
-                std::max(dictWord.length(), word.length())/2)
+            double total = penalty + log(score) - wordPenalty;
+            wordList->push_back(entry(dictWord, total));
+            if (total > (*bestFound))
+            {
+                (*allowedMinFreq) = std::max((*allowedMinFreq), 
+                    (int)(score*exp(penalty)));
+                (*bestFound) = total;
+            }
+            continue;
+        }
+        
+        std::string common = LCS(word, dictWord);
+        
+        if (common.length() == 0)
+            continue;
+        int maxLen = std::max(dictWord.length(), word.length());
+        
+        if (maxLen > 4)
+        {
+            if (common.length() <= maxLen/2)
                 continue;
         }
-        double penalty = 0;
+        
         i = 0;
         j = 0;
         //std::cout<<"c"<<std::endl;
