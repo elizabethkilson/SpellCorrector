@@ -178,10 +178,136 @@ double scoreBigram( std::string first, std::string second, corrector * corr,
     {
         if (bigramSet->count(second))
         {
-            score += log(bigramSet->at(second) + 1);
+            score += bigramSet->at(second);
         }
     }
     return score;
+}
+
+std::string Viterbi3( std::string text, corrector * corr, sqlite3 * db, 
+    int num_bigrams, double made_up_word_penalty, int acceptable_freq)
+{
+    clock_t t;
+    t = clock();
+    
+    std::unordered_map<std::string, std::list<dictEntry>> 
+        bigramLists = std::unordered_map<std::string, std::list<dictEntry>>();
+    
+    double bigram_penalty = log(num_bigrams);
+    made_up_word_penalty = std::max(made_up_word_penalty, 
+        bigram_penalty + log(corr->getNWords()));
+    
+    int n = text.length();
+    std::vector<std::string> words = std::vector<std::string>(n + 1, "");
+    words[0] = text;
+    std::vector<double> best = std::vector<double>(n + 1, -3000.0);
+    std::vector<int> lens = std::vector<int>(n + 1, n);
+    best[0] = 0.0;
+    for (int i = 0; i < n + 1; i++)
+    {
+        for (int j = 0; j < i; j++)
+        {
+            std::string word = text.substr(j, i-j);
+            int w = word.length();
+            double p = -1*made_up_word_penalty;
+            if (w > AVERAGE_WORD_LEN)
+            {
+                p = p*w/AVERAGE_WORD_LEN;
+            }
+            
+            std::list<entry> wordList = std::list<entry>();
+            
+            bool found = false;
+            if (bigramLists.count(words[i - j]))
+            {
+                //Test bigrams
+                corr->fillPossibleWordListLin( &wordList, 
+                    &(bigramLists.at(words[i - j])), 
+                    bigram_penalty, word, -20);
+                
+                if (found = (!wordList.empty()))
+                {
+                    entry e = wordList.front();
+                    word = e.str;
+                    p = e.d;
+                }
+            }
+            
+            if (!found)
+            {
+                //Test unigrams
+                int count;
+                if (count = corr->getWordFreq(word))
+                {
+                    p = log(count) - log(corr->getNWords());
+                    found = true;
+                }
+                if (count < acceptable_freq)
+                {
+                    corr->fillPossibleWordListLin( &wordList,
+                        word, -20, 1000, acceptable_freq, 1);
+                    if ((!wordList.empty()))
+                    {
+                        entry e = wordList.front();
+                        if (e.d > p)
+                        {
+                            word = e.str;
+                            p = e.d;
+                        }
+                        found = true;
+                    }
+                }
+                if (found)
+                {//ensure word without bigram has lower score than any with
+                    p -= bigram_penalty;
+                }
+            }
+            
+            if (found && (i < n)) //word exists and is not the last word
+            {
+                if (!bigramLists.count(word))
+                {
+                    //Load bigram list
+                    std::list<dictEntry> * bigramList;
+                    int count = fillBigramList( &bigramList, word, db );
+                    if ((bigramList != NULL) && (count != 0))
+                    {
+                        bigramLists[word] = std::move(*bigramList);
+                    }
+                }
+            }
+            
+            if (p + best[i - w] >= best[i])
+            {
+                //std::cout<<"i "<<i<<" j "<<j<<std::endl;
+                //std::cout<<word<<std::endl;
+                //std::cout<<"score "<<p + best[i - w]<<" prev "<<best[i - w]<<" best "<<best[i]<<" w "<<w<<std::endl;
+                best[i] = p + best[i - w];
+                words[i] = word;
+                lens[i] = w;
+            }
+        }
+    }
+    
+    std::string sequence = words[n];
+    //std::cout<<"i "<<n<<" word "<<words[n]<<std::endl;
+    int i = n - lens[n];
+    //std::cout<<lens[i]<<std::endl;
+    while (i > 0)
+    {
+        //std::cout<<"i "<<i<<" word "<<words[i]<<std::endl;
+        sequence = words[i] + " " + sequence;
+        //std::cout<<sequence<<std::endl;
+        //std::cout<<lens.size()<<std::endl;
+        //std::cout<<lens[i]<<std::endl;
+        i = i - lens[i];
+    }
+    
+    t = clock() - t;
+    
+    std::cout<<"time for Viterbi3: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
+    
+    return sequence;
 }
 
 void Viterbi2_update_vectors(std::vector<std::vector<std::string>> * words,
