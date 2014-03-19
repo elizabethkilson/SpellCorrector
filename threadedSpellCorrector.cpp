@@ -247,7 +247,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
     {
         std::vector<std::thread> searches;
         //std::mutex data_write_lock;
-        for (int j = 0; j < i; j++)
+        for (int j = std::max(0, i - 10); j < i; j++)
         {
             //std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
             bool inserted = false;
@@ -277,20 +277,11 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
             }
             //std::cout<<"d "<<std::endl;
             
-            /*std::function<void (corrector *, std::string, double, double, std::mutex,
-    std::function<void (*fptr)(SpellCorrector::ViterbiWSA::*)
-    (int, double, std::string, int)>, void * context)>  */
-    
-            auto fp = &ViterbiWSA::update_vectors;
-            
-            /*std::thread th (correcting_search, corr, word, 
-                std::get<0>(best[i - w][0]), std::get<0>(best[i][0]), 
-                 fp, this);*/
              std::thread th (correcting_search, corr, word, i,
                 std::get<0>(best[i - w][0]), std::get<0>(best[i][0]), this);
-            //searches.push_back(th);
+            searches.push_back(std::move(th));
             
-            //std::cout<<"f "<<std::endl;
+            //std::cout<<"e "<<std::endl;
             if (!inserted && (p > std::get<0>(best[i][storage_num - 1])))
             {
                 p += std::get<0>(best[i - w][0]);
@@ -471,7 +462,7 @@ void correcting_search(corrector * corr, std::string word, int i, double prev,
     double min, ViterbiWSA * v)
 {
     std::list<entry> * wordList = new std::list<entry>();
-    corr->fillPossibleWordListLin(wordList, word, -20, 1000, 300, 1);
+    corr->fillPossibleWordListLin(wordList, word, -20, 1000, 1, 1);
     double p;
     //std::cout<<"e "<<std::endl;
     if ((wordList != NULL)&&(!wordList->empty()))
@@ -547,7 +538,7 @@ std::string correct(std::string input, double confidence, corrector * corr,
         made_up_word_penalty = (100 - confidence)*3;
     }
     std::cout<<"made up word penalty "<<made_up_word_penalty<<std::endl;
-    int acceptable_freq = 800;
+    int acceptable_freq = 1;
     std::cout<<"f"<<std::endl;
     ViterbiWSA v;
     input = v.Viterbi(input, corr, db, made_up_word_penalty, acceptable_freq, 

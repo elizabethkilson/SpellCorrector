@@ -524,7 +524,7 @@ std::string correct(std::string input, double confidence, corrector * corr,
         made_up_word_penalty = (100 - confidence)*3;
     }
     std::cout<<"made up word penalty "<<made_up_word_penalty<<std::endl;
-    int acceptable_freq = 800;
+    int acceptable_freq = 1;
     std::cout<<"f"<<std::endl;
     input = Viterbi2(input, corr, db, made_up_word_penalty, acceptable_freq, 4);
     std::cout<<"g"<<std::endl;

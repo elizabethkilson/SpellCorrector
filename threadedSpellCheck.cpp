@@ -43,8 +43,6 @@ int main()
     std::string first = "0BEGIN.0";
     double confidence;
     
-    std::cin>>input;
-    
     while (std::cin>>input)
     {
         confidence = 89;
