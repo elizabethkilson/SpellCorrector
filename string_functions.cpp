@@ -6,6 +6,9 @@
 #include <iostream>
 #include <sstream>
 
+namespace SpellCorrector
+{
+
 std::string LCS(std::string X, std::string Y)
 {
     //std::cout<<"a"<<std::endl;
@@ -146,4 +149,6 @@ bool eoph (std::string const &fullString, std::string const &endings)
             return true;
     }
     return false;
+}
+
 }

@@ -5,6 +5,9 @@
 #include <sstream>
 #include <iostream>
 
+namespace SpellCorrector
+{
+
 corrector::corrector()
 {
     std::cout<<"corrector()"<<std::endl;
@@ -588,6 +591,12 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
         std::string dictWord = it->str;
         double penalty = 0;
         
+        int maxLen = std::max(dictWord.length(), word.length());
+        int minLen = std::min(dictWord.length(), word.length());
+        
+        if (maxLen - minLen > minLen)
+            continue;
+        
         if (word == dictWord)
         {
             double total = penalty + log(score) - wordPenalty;
@@ -605,7 +614,6 @@ void corrector::do_fillPossibleWordList( std::list<entry> * wordList,
         
         if (common.length() == 0)
             continue;
-        int maxLen = std::max(dictWord.length(), word.length());
         
         if (maxLen > 4)
         {
@@ -719,7 +727,7 @@ void corrector::fillPossibleWordListLin( std::list<entry> * wordList,
     std::list<dictEntry> * choices, double wordPenalty,
     std::string word, double maxErr, int forcedMinFreq, int allowedMinFreq)
 {
-    double bestFound = maxErr - log(nWords);
+    double bestFound = maxErr - wordPenalty;
     if (word.length() < 1)
         return;
     do_fillPossibleWordList( wordList, word, maxErr, forcedMinFreq,
@@ -919,7 +927,7 @@ void corrector::fillPossibleWordListExp( std::list<entry> * wordList,
     wordList->reverse();
 }
 
-
+}
 
 
 

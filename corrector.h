@@ -13,6 +13,9 @@
 
 #define MAX_ERROR_LEN 4
 
+namespace SpellCorrector
+{
+
 class corrector{
 	private:
 		std::vector<std::list<dictEntry> *> * dictionary;
@@ -89,5 +92,7 @@ std::string format_white_space(std::string orig);
 std::string strip_punc(std::string orig);
 int word_count(std::string orig);
 bool eoph (std::string const &fullString, std::string const &endings);
+
+}
 
 #endif //_CORRECTOR_H
