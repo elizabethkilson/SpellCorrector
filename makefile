@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-CC := clang++ --std=c++11
+CC := g++ --std=c++11
 
 default: threadedSpellCheck.exe spellCheck.exe
 

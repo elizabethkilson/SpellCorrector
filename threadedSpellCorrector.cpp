@@ -287,7 +287,8 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
             count_lock.lock();
             threadsRunning++;
             count_lock.unlock();
-            tpool->execute([&] () 
+            //std::cout<<"e"<<std::endl;
+            tpool->execute([&, w, word, i, corr] () 
                 {return correcting_search(corr, word, i, 
                 std::get<0>(best[i - w][0]), std::get<0>(best[i][0]),
                 &data_write_lock, &threadsRunning, &count_lock, &cv, this);});
@@ -297,7 +298,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 &data_write_lock, this);
             searches.push_back(std::move(th));*/
             
-            //std::cout<<"e "<<std::endl;
+            //std::cout<<"f "<<std::endl;
             if (!inserted && (p > std::get<0>(best[i][storage_num - 1])))
             {
                 p += std::get<0>(best[i - w][0]);
@@ -313,8 +314,10 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 t.join();
             }
         }*/
+        //std::cout<<"g"<<std::endl;
         std::unique_lock<std::mutex> ul (count_lock);
-        cv.wait(ul, [threadsRunning]{ return threadsRunning == 0;});
+        cv.wait(ul, [&]{ return threadsRunning == 0;});
+        //std::cout<<"h"<<std::endl;
     }
     //std::cout<<"a2 "<<std::endl;
     std::list<std::string> results = std::list<std::string>();
@@ -572,6 +575,7 @@ std::string correct(std::string input, double confidence, corrector * corr,
     input = v.Viterbi(input, corr, db, made_up_word_penalty, acceptable_freq, 
         4, correcting_search, &tpool);
     std::cout<<"g"<<std::endl;
+    tpool.shutdown();
     return input;
 }
 
