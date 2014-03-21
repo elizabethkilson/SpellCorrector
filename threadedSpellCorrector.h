@@ -1,10 +1,12 @@
 #ifndef _SPELLCORRECTOR_H
 #define _SPELLCORRECTOR_H
 #include "corrector.h"
+#include "../libdistributed/ThreadPool.hpp"
 #include <string>
 #include <sqlite3.h>
 #include <functional>
 #include <mutex>
+#include <condition_variable>
 
 #define AVERAGE_WORD_LEN 6
 
@@ -39,7 +41,8 @@ public:
     std::string Viterbi( std::string text, corrector * corr, sqlite3 * db, 
         double made_up_word_penalty, int acceptable_freq, int storage_num, 
         std::function<void (corrector *, std::string, int, double, double, 
-        ViterbiWSA*)> correcting_search);
+        std::mutex *, int *, std::mutex *, std::condition_variable *, 
+        ViterbiWSA*)> correcting_search, ThreadPool * tpool);
     double update_vectors(int i, double p, std::string word, int w);
 };
 

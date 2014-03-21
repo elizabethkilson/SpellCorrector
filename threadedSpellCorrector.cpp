@@ -233,7 +233,8 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
     sqlite3 * db, double made_up_word_penalty, int acceptable_freq, 
     int storage_num,
     std::function<void (corrector *, std::string, int, double, double, 
-    ViterbiWSA*)> correcting_search)
+    std::mutex *, int *, std::mutex *, std::condition_variable *, 
+    ViterbiWSA*)> correcting_search, ThreadPool * tpool)
 {
     clock_t t;
     t = clock();
@@ -243,10 +244,14 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         std::tuple<double, std::string, int>(-10000, "", n)));
     best[0][0] = std::tuple<double, std::string, int>(0.0, text, n);
     //std::cout<<"a "<<std::endl;
+    //boost::threadpool::pool tp(4);
     for (int i = 0; i < n + 1; i++)
     {
         std::vector<std::thread> searches;
-        //std::mutex data_write_lock;
+        std::mutex data_write_lock;
+        int threadsRunning = 0;
+        std::mutex count_lock;
+        std::condition_variable cv;
         for (int j = std::max(0, i - 10); j < i; j++)
         {
             //std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
@@ -271,30 +276,45 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 p += std::get<0>(best[i - w][0]);
                 if (p > std::get<0>(best[i][storage_num - 1]))
                 {
+                    data_write_lock.lock();
                     update_vectors( i, p, word, w);
+                    data_write_lock.unlock();
                 }
                 inserted = true;
             }
             //std::cout<<"d "<<std::endl;
             
-             std::thread th (correcting_search, corr, word, i,
-                std::get<0>(best[i - w][0]), std::get<0>(best[i][0]), this);
-            searches.push_back(std::move(th));
+            count_lock.lock();
+            threadsRunning++;
+            count_lock.unlock();
+            tpool->execute([&] () 
+                {return correcting_search(corr, word, i, 
+                std::get<0>(best[i - w][0]), std::get<0>(best[i][0]),
+                &data_write_lock, &threadsRunning, &count_lock, &cv, this);});
+            
+            /*std::thread th (correcting_search, corr, word, i,
+                std::get<0>(best[i - w][0]), std::get<0>(best[i][0]),
+                &data_write_lock, this);
+            searches.push_back(std::move(th));*/
             
             //std::cout<<"e "<<std::endl;
             if (!inserted && (p > std::get<0>(best[i][storage_num - 1])))
             {
                 p += std::get<0>(best[i - w][0]);
+                data_write_lock.lock();
                 update_vectors( i, p, word, w);
+                data_write_lock.unlock();
             }
         }
         
-        for (std::thread &t: searches) 
+        /*for (std::thread &t: searches) 
         {
             if (t.joinable()) {
                 t.join();
             }
-        }
+        }*/
+        std::unique_lock<std::mutex> ul (count_lock);
+        cv.wait(ul, [threadsRunning]{ return threadsRunning == 0;});
     }
     //std::cout<<"a2 "<<std::endl;
     std::list<std::string> results = std::list<std::string>();
@@ -459,7 +479,8 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
 }
 
 void correcting_search(corrector * corr, std::string word, int i, double prev, 
-    double min, ViterbiWSA * v)
+    double min, std::mutex * data_write_lock, int * threads, 
+    std::mutex * count_lock, std::condition_variable * cv, ViterbiWSA * v)
 {
     std::list<entry> * wordList = new std::list<entry>();
     corr->fillPossibleWordListLin(wordList, word, -20, 1000, 1, 1);
@@ -476,12 +497,18 @@ void correcting_search(corrector * corr, std::string word, int i, double prev,
                 ++it;
                 continue;
             }
+            data_write_lock->lock();
             min = v->update_vectors( i, p, it->str, word.length());
+            data_write_lock->unlock();
         }
         ++it;
     }
     //std::cout<<"f "<<std::endl;
     delete wordList;
+    count_lock->lock();
+    (*threads)--;
+    count_lock->unlock();
+    cv->notify_all();
 }
 
 std::string correct(std::string input, double confidence, corrector * corr,
@@ -541,8 +568,9 @@ std::string correct(std::string input, double confidence, corrector * corr,
     int acceptable_freq = 1;
     std::cout<<"f"<<std::endl;
     ViterbiWSA v;
+    ThreadPool tpool (4);
     input = v.Viterbi(input, corr, db, made_up_word_penalty, acceptable_freq, 
-        4, correcting_search);
+        4, correcting_search, &tpool);
     std::cout<<"g"<<std::endl;
     return input;
 }
