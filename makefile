@@ -4,8 +4,8 @@ CC := g++ --std=c++11
 
 default: threadedSpellCheck.exe spellCheck.exe
 
-threadedSpellCheck.exe: threadedSpellCheck.o threadedSpellCorrector.o corrector.o string_functions.o ../libdistributed/ThreadPool.o
-	$(CC) -o threadedSpellCheck.exe threadedSpellCheck.o threadedSpellCorrector.o corrector.o ../libdistributed/ThreadPool.o string_functions.o -lsqlite3 -lboost_system
+threadedSpellCheck.exe: threadedSpellCheck.o threadedSpellCorrector.o corrector.o string_functions.o
+	$(CC) -o threadedSpellCheck.exe threadedSpellCheck.o threadedSpellCorrector.o corrector.o string_functions.o -lsqlite3 -lboost_system
 
 spellCheck.exe: spellCheck.o spellCorrector.o corrector.o string_functions.o
 	$(CC) -o spellCheck.exe spellCheck.o spellCorrector.o corrector.o string_functions.o -lsqlite3
