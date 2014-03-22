@@ -15,6 +15,7 @@
 #define cmd_close  "__close__"
 #define cmd_eoph "__eoph__"
 
+using namespace Distributed;
 
 namespace SpellCorrector
 {

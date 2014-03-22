@@ -15,6 +15,8 @@
 #include <time.h>
 #include <thread>
 
+using namespace Distributed;
+
 namespace SpellCorrector
 {
 
