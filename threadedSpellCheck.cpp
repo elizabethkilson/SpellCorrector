@@ -43,9 +43,10 @@ int main()
     std::string first = "0BEGIN.0";
     double confidence;
     
+    ThreadPool tpool (4);
+    
     while (std::cin>>input)
     {
-        confidence = 89;
         //wordList = new std::list<entry>();
         
         //corr->fillPossibleWordListLin(wordList, input, -20);
@@ -53,7 +54,7 @@ int main()
         //entry e = wordList->front();
         
         
-        output = correct(input, confidence, corr, first, db);
+        output = correct(input, corr, first, db, &tpool);
         std::cout<<"returned"<<std::endl;
         std::cout<<output<<std::endl;
         
@@ -66,6 +67,8 @@ int main()
         
         //delete wordList;
     }
+    
+    tpool.shutdown();
     
     delete corr;
     return 0;
@@ -89,6 +92,8 @@ int main2()
         std::cout<<"Can't open database"<<std::endl;
         return 1;
     }
+    
+    ThreadPool tpool (4);
     
     int outfd;
     std::string fifoName = "/tmp/sc2esFIFO";
@@ -126,10 +131,12 @@ int main2()
         
         in>>confidence;
         
-        input = correct(input, confidence, corr, first, db);
+        input = correct(input, corr, first, db, &tpool);
         
         
     }
+    
+    tpool.shutdown();
     
     return 0;
 }

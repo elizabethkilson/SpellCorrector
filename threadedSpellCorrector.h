@@ -47,8 +47,8 @@ public:
     double update_vectors(int i, double p, std::string word, int w);
 };
 
-std::string correct(std::string input, double confidence, corrector * corr,
-    std::string first, sqlite3 * db);
+std::string correct(std::string input, corrector * corr,
+    std::string first, sqlite3 * db, ThreadPool * tpool);
 }
 
 #endif //_SPELLCORRECTOR_H

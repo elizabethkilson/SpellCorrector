@@ -516,40 +516,29 @@ void correcting_search(corrector * corr, std::string word, int i, double prev,
     cv->notify_all();
 }
 
-std::string correct(std::string input, double confidence, corrector * corr,
-    std::string first, sqlite3 * db)
+std::string correct(std::string input, corrector * corr,
+    std::string first, sqlite3 * db, ThreadPool * tpool)
 {
-    std::cout<<"a "<<confidence<<std::endl;
-    //int correctCase;
-    std::locale loc;
-    std::cout<<"b "<<corr->getWordFreq(input)<<std::endl;
     if (corr->getWordFreq(input))
     {
-        std::cout<<"word found 1"<<std::endl;
-        if (confidence < 90) //TODO: find good threshold
+        if (first == cmd_begin)
         {
-            if (first == cmd_begin)
+            std::list<entry> wordList = std::list<entry>();
+            corr->fillPossibleWordListLin(&wordList, input, -20);
+            if (!wordList.empty())
             {
-                std::list<entry> wordList = std::list<entry>();
-                corr->fillPossibleWordListLin(&wordList, input, -20);
-                if (!wordList.empty())
-                {
-                    entry e = wordList.front();
-                    input = e.str;
-                }
-            }
-            else
-            {
-                input = bestBigram(first, input, corr, db);
+                entry e = wordList.front();
+                input = e.str;
             }
         }
-        std::cout<<"word found 2"<<std::endl;
+        else
+        {
+            input = bestBigram(first, input, corr, db);
+        }
         return input;
     }
-    std::cout<<"c"<<std::endl;
     std::list<entry> wordList = std::list<entry>();
     corr->fillPossibleWordListLin(&wordList, input, -20);
-    std::cout<<"d"<<std::endl;
     if (!wordList.empty())
     {
         entry e = wordList.front();
@@ -559,25 +548,11 @@ std::string correct(std::string input, double confidence, corrector * corr,
             return e.str;
         }
     }
-    std::cout<<"e"<<std::endl;
-    double made_up_word_penalty;
-    if (isupper(input[0]))
-    {
-        made_up_word_penalty = (100 - confidence)*3;
-    }
-    else
-    {
-        made_up_word_penalty = (100 - confidence)*3;
-    }
-    std::cout<<"made up word penalty "<<made_up_word_penalty<<std::endl;
+    double made_up_word_penalty = 60;
     int acceptable_freq = 1;
-    std::cout<<"f"<<std::endl;
     ViterbiWSA v;
-    ThreadPool tpool (4);
     input = v.Viterbi(input, corr, db, made_up_word_penalty, acceptable_freq, 
-        4, correcting_search, &tpool);
-    std::cout<<"g"<<std::endl;
-    tpool.shutdown();
+        4, correcting_search, tpool);
     return input;
 }
 
