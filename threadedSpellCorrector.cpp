@@ -55,7 +55,7 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     
     if ((rc != SQLITE_DONE)&&(rc != SQLITE_OK))
     {
-        std::cout<<"Error reading bigram list "<<rc<<std::endl;
+        std::cerr<<"Error reading bigram list "<<rc<<std::endl;
     }
     
     (*bigramList)->sort();
@@ -63,7 +63,7 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     
     t = clock() - t;
     
-    //std::cout<<"time to load bigram list for "<<first<<": "<<
+    //std::cerr<<"time to load bigram list for "<<first<<": "<<
         //((float)t)/CLOCKS_PER_SEC<<std::endl;
     
     return count;
@@ -100,7 +100,7 @@ void fillBigramSet( std::unordered_map<std::string, int> ** bigramSet,
     
     t = clock() - t;
     
-    std::cout<<"time to load bigram set for "<<first<<": "<<
+    std::cerr<<"time to load bigram set for "<<first<<": "<<
         ((float)t)/CLOCKS_PER_SEC<<std::endl;
     
     /*std::locale loc;
@@ -178,7 +178,7 @@ double scoreBigram( std::string first, std::string second, corrector * corr,
 
 double ViterbiWSA::update_vectors(int i, double p, std::string word, int w)
 {
-    //std::cout<<"update "<<word<<" "<<p<<std::endl;
+    //std::cerr<<"update "<<word<<" "<<p<<std::endl;
     if (p < std::get<0>(best[i][best[i].size() - 1]))
         return std::get<0>(best[i][best[i].size() - 1]);
     int k;
@@ -245,7 +245,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         (n + 1, std::vector<std::tuple<double, std::string, int>> (storage_num,
         std::tuple<double, std::string, int>(-10000, "", n)));
     best[0][0] = std::tuple<double, std::string, int>(0.0, text, n);
-    //std::cout<<"a "<<std::endl;
+    //std::cerr<<"a "<<std::endl;
     //boost::threadpool::pool tp(4);
     for (int i = 0; i < n + 1; i++)
     {
@@ -256,7 +256,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         std::condition_variable cv;
         for (int j = std::max(0, i - 10); j < i; j++)
         {
-            //std::cout<<"1 i "<<i<<" j "<<j<<std::endl;
+            //std::cerr<<"1 i "<<i<<" j "<<j<<std::endl;
             bool inserted = false;
             std::string word = text.substr(j, i-j);
             int w = word.length();
@@ -269,9 +269,9 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
             {
                 p = p*w/AVERAGE_WORD_LEN;
             }
-            //std::cout<<"b "<<std::endl;
+            //std::cerr<<"b "<<std::endl;
             int count;
-            //std::cout<<"c "<<std::endl;
+            //std::cerr<<"c "<<std::endl;
             if (count = corr->getWordFreq(word))
             {
                 p = log(count) - log(corr->getNWords());
@@ -284,12 +284,12 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 }
                 inserted = true;
             }
-            //std::cout<<"d "<<std::endl;
+            //std::cerr<<"d "<<std::endl;
             
             count_lock.lock();
             threadsRunning++;
             count_lock.unlock();
-            //std::cout<<"e"<<std::endl;
+            //std::cerr<<"e"<<std::endl;
             tpool->execute([&, w, word, i, corr] () 
                 {return correcting_search(corr, word, i, 
                 std::get<0>(best[i - w][0]), std::get<0>(best[i][0]),
@@ -300,7 +300,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 &data_write_lock, this);
             searches.push_back(std::move(th));*/
             
-            //std::cout<<"f "<<std::endl;
+            //std::cerr<<"f "<<std::endl;
             if (!inserted && (p > std::get<0>(best[i][storage_num - 1])))
             {
                 p += std::get<0>(best[i - w][0]);
@@ -316,12 +316,12 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 t.join();
             }
         }*/
-        //std::cout<<"g"<<std::endl;
+        //std::cerr<<"g"<<std::endl;
         std::unique_lock<std::mutex> ul (count_lock);
         cv.wait(ul, [&]{ return threadsRunning == 0;});
-        //std::cout<<"h"<<std::endl;
+        //std::cerr<<"h"<<std::endl;
     }
-    //std::cout<<"a2 "<<std::endl;
+    //std::cerr<<"a2 "<<std::endl;
     std::list<std::string> results = std::list<std::string>();
     
     std::vector<int> indices = std::vector<int>(n, 0);
@@ -336,10 +336,10 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
     std::unordered_set<int> checked = std::unordered_set<int>();
     
     indices_list.push_front(std::vector<int>(results.size(), 0));
-    //std::cout<<"b "<<std::endl;
+    //std::cerr<<"b "<<std::endl;
     while (!indices_list.empty())
     {
-        //std::cout<<"c "<<std::endl;
+        //std::cerr<<"c "<<std::endl;
         indices = indices_list.front();
         indices_list.pop_front();
         /*int key = 0;
@@ -351,22 +351,22 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
             continue;*/
         for (int i = 0; i < indices.size(); i++)
         {
-            std::cout<<indices[i]<<" ";
+            std::cerr<<indices[i]<<" ";
         }
-        std::cout<<std::endl;
+        std::cerr<<std::endl;
         
         results = std::list<std::string>();
         unwrap_string( &results, &indices );
         
         for (auto it = results.begin(); it != results.end(); ++it)
         {
-            std::cout<<(*it)<<" ";
+            std::cerr<<(*it)<<" ";
         }
-        std::cout<<std::endl;
+        std::cerr<<std::endl;
         
         if (results.empty())
             continue;
-        //std::cout<<"d "<<std::endl;
+        //std::cerr<<"d "<<std::endl;
         std::list<std::string>::iterator it = --(--results.end());
         std::list<std::string>::iterator it2 = --results.end();
         bool bigrams_found = (results.size() > 1);
@@ -375,11 +375,11 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         for (int i = indices.size() - 1; (it2 != results.begin()) && (i >= 0);
             --it, --it2, --i)
         {
-            //std::cout<<"1 i "<<i<<std::endl;
+            //std::cerr<<"1 i "<<i<<std::endl;
             double score = scoreBigram( (*it), (*it2), corr, &bigramSets, db );
-            //std::cout<<"2 "<<std::endl;
+            //std::cerr<<"2 "<<std::endl;
             bigrams_found = bigrams_found && (score > 0);
-            //std::cout<<"3 "<<std::endl;
+            //std::cerr<<"3 "<<std::endl;
             new_indices[i - offset] = indices[i];
             if (!score)
             {
@@ -415,7 +415,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     new_indices[i - offset - 1]++;
                 }
             }
-            //std::cout<<"4 "<<std::endl;
+            //std::cerr<<"4 "<<std::endl;
         }
         int ind = -1*offset;
         while (it2 != results.begin())
@@ -460,10 +460,10 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         }
         if (bigrams_found)
         {
-            std::cout<<"bigrams found"<<std::endl;
+            std::cerr<<"bigrams found"<<std::endl;
             t = clock() - t;
     
-            std::cout<<"time for Viterbi2: "<<
+            std::cerr<<"time for Viterbi2: "<<
                 ((float)t)/CLOCKS_PER_SEC<<std::endl;
                 
             return create_sequence(&results);
@@ -478,7 +478,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
     
     t = clock() - t;
 
-    std::cout<<"time for Viterbi2: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
+    std::cerr<<"time for Viterbi2: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
     
     return create_sequence(&results);
 }
@@ -490,7 +490,7 @@ void correcting_search(corrector * corr, std::string word, int i, double prev,
     std::list<entry> * wordList = new std::list<entry>();
     corr->fillPossibleWordListLin(wordList, word, -20, 1000, 1, 1);
     double p;
-    //std::cout<<"e "<<std::endl;
+    //std::cerr<<"e "<<std::endl;
     if ((wordList != NULL)&&(!wordList->empty()))
     {
         std::list<entry>::iterator it = wordList->begin();
@@ -508,7 +508,7 @@ void correcting_search(corrector * corr, std::string word, int i, double prev,
         }
         ++it;
     }
-    //std::cout<<"f "<<std::endl;
+    //std::cerr<<"f "<<std::endl;
     delete wordList;
     count_lock->lock();
     (*threads)--;
@@ -544,7 +544,7 @@ std::string correct(std::string input, corrector * corr,
         entry e = wordList.front();
         if (e.d > -50) //TODO: find good threshold
         {
-            std::cout<<"score "<<e.d<<std::endl;
+            std::cerr<<"score "<<e.d<<std::endl;
             return e.str;
         }
     }
