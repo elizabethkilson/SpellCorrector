@@ -98,6 +98,8 @@ void fillBigramSet( std::unordered_map<std::string, int> ** bigramSet,
         (*bigramSet)->insert({second, score});
     } while (sqlite3_step(ppStmt) == SQLITE_ROW);
     
+    std::cout << "Bigram set size: " << (*bigramSet)->size() <<std::endl;
+    
     t = clock() - t;
     
     std::cout<<"time to load bigram set for "<<first<<": "<<
@@ -333,17 +335,22 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         std::unordered_map<std::string, int> *>();
     
     std::list<std::vector<int>> indices_list = std::list<std::vector<int>>();
-    std::unordered_set<int> checked = std::unordered_set<int>();
+    //std::unordered_set<int> checked = std::unordered_set<int>();
     
+    int safetyCount = 0;
+
     indices_list.push_front(std::vector<int>(results.size(), 0));
     //std::cout<<"b "<<std::endl;
     while (!indices_list.empty())
     {
+        ++safetyCount;
+        std::cout<<"Safety Count: "<<safetyCount<<std::endl;
+        if (safetyCount > 10) break;
         //std::cout<<"c "<<std::endl;
         indices = indices_list.front();
         indices_list.pop_front();
-        /*int key = 0;
-        for (int i = 0; i < indices.size(); i++)
+        int key = 0;
+        /*for (int i = 0; i < indices.size(); i++)
         {
             key = key*storage_num + indices[i];
         }
@@ -377,45 +384,57 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         {
             //std::cout<<"1 i "<<i<<std::endl;
             double score = scoreBigram( (*it), (*it2), corr, &bigramSets, db );
+            std::cout << "Bigram score for "<< (*it) << " " << (*it2) <<": "<<score<<std::endl;
             //std::cout<<"2 "<<std::endl;
             bigrams_found = bigrams_found && (score > 0);
             //std::cout<<"3 "<<std::endl;
             new_indices[i - offset] = indices[i];
             if (!score)
             {
+                std::cout<< "a" <<std::endl;
                 if (new_indices[i - offset] < storage_num - 1)
                 {
+                    std::cout<<"new indices size: "<<new_indices.size() << std::endl;
                     new_indices[i - offset]++;
-                    int key = 0;
-                    for (int j = 0; j < new_indices.size(); j++)
+                    //int key = 0;
+                    std::cout<< "a2" <<std::endl;
+                    /*for (int j = 0; j < new_indices.size(); j++)
                     {
-                        key = key*storage_num + indices[j];
-                    }
-                    if (!checked.count(key))
+                        key = key*storage_num + new_indices[j];
+                        std::cout<<j<<" "<<new_indices.size()<<std::endl;
+                    }*/
+                    std::cout<< "a3" <<std::endl;
+                    //if (!checked.count(key))
                     {
+                        std::cout<< "a32" <<std::endl;
                         indices_list.push_back(new_indices);
-                        checked.insert(key);
+                        std::cout<< "a33" <<std::endl;
+                        //checked.insert(key);
+                        std::cout<< "a34" <<std::endl;
                     }
+                    std::cout<< "a4" <<std::endl;
                     new_indices[i - offset]--;
                 }
+                std::cout<< "b" <<std::endl;
                 if (((i - offset - 1) > 0) && 
                     (new_indices[i - offset - 1] < storage_num - 1))
                 {
                     new_indices[i - offset - 1]++;
-                    int key = 0;
-                    for (int j = 0; j < new_indices.size(); j++)
+                    //int key = 0;
+                    /*for (int j = 0; j < new_indices.size(); j++)
                     {
-                        key = key*storage_num + indices[j];
-                    }
-                    if (!checked.count(key))
+                        key = key*storage_num + new_indices[j];
+                    }*/
+                    //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
-                        checked.insert(key);
+                        //checked.insert(key);
                     }
                     new_indices[i - offset - 1]++;
                 }
+                std::cout<< "c" <<std::endl;
             }
-            //std::cout<<"4 "<<std::endl;
+            std::cout<<"end of if (!score)"<<std::endl;
         }
         int ind = -1*offset;
         while (it2 != results.begin())
@@ -427,15 +446,15 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                 if (new_indices[ind] < storage_num - 1)
                 {
                     new_indices[ind]++;
-                    int key = 0;
+                    /*int key = 0;
                     for (int j = 0; j < new_indices.size(); j++)
                     {
                         key = key*storage_num + indices[j];
-                    }
-                    if (!checked.count(key))
+                    }*/
+                    //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
-                        checked.insert(key);
+                        //checked.insert(key);
                     }
                     new_indices[ind]--;
                 }
@@ -443,15 +462,15 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     (new_indices[ind - 1] < storage_num - 1))
                 {
                     new_indices[ind - 1]++;
-                    int key = 0;
+                    /*int key = 0;
                     for (int j = 0; j < new_indices.size(); j++)
                     {
                         key = key*storage_num + indices[j];
-                    }
-                    if (!checked.count(key))
+                    }*/
+                    //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
-                        checked.insert(key);
+                        //checked.insert(key);
                     }
                     new_indices[ind - 1]++;
                 }
@@ -537,19 +556,78 @@ std::string correct(std::string input, corrector * corr,
         }
         return input;
     }
+    
+    std::string lowered = input;
+    std::locale loc;
+    for (int i = 0; i < input.length(); ++i)
+    {
+        lowered[i] = std::tolower(input[i], loc);
+    }
+    if (corr->getWordFreq(lowered))
+    {
+        if (first == cmd_begin)
+        {
+            std::list<entry> wordList = std::list<entry>();
+            corr->fillPossibleWordListLin(&wordList, lowered, -20);
+            if (!wordList.empty())
+            {
+                entry e = wordList.front();
+                lowered = e.str;
+            }
+        }
+        else
+        {
+            lowered = bestBigram(first, lowered, corr, db);
+        }
+        return lowered;
+    }
+    
     std::list<entry> wordList = std::list<entry>();
     corr->fillPossibleWordListLin(&wordList, input, -20);
+    double reasonableFound = 0;
+    std::string strFound;
     if (!wordList.empty())
     {
         entry e = wordList.front();
-        if (e.d > -50) //TODO: find good threshold
+        if (e.d > -25) //TODO: find good threshold
         {
             std::cout<<"score "<<e.d<<std::endl;
             return e.str;
         }
+        if (e.d > -30)
+        {
+            reasonableFound = e.d;
+            strFound = e.str;
+        }
     }
+    
+    wordList = std::list<entry>();
+    corr->fillPossibleWordListLin(&wordList, lowered, -20);
+    if (!wordList.empty())
+    {
+        entry e = wordList.front();
+        if (e.d > -25) //TODO: find good threshold
+        {
+            //std::cout<<"4 e.d: "<<e.d<<" confidence: "<<confidence<<" "<<e.str<<std::endl;
+            return e.str;
+        }
+        if (e.d > -30)
+        {
+            if ((!(reasonableFound))||(e.d > reasonableFound))
+            {
+                //std::cout<<"4 e.d: "<<e.d<<" confidence: "<<confidence<<" "<<e.str<<std::endl;
+                return e.str;
+            }
+        }
+        if (reasonableFound)
+        {
+            //std::cout<<"3 e.d: "<<reasonableFound<<" confidence: "<<confidence<<" "<<strFound<<std::endl;
+            return strFound;
+        }
+    }
+    
     double made_up_word_penalty = 60;
-    int acceptable_freq = 1;
+    int acceptable_freq = 200;
     ViterbiWSA v;
     input = v.Viterbi(input, corr, db, made_up_word_penalty, acceptable_freq, 
         4, correcting_search, tpool);
