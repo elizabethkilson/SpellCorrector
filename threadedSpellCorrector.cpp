@@ -98,12 +98,12 @@ void fillBigramSet( std::unordered_map<std::string, int> ** bigramSet,
         (*bigramSet)->insert({second, score});
     } while (sqlite3_step(ppStmt) == SQLITE_ROW);
     
-    std::cout << "Bigram set size: " << (*bigramSet)->size() <<std::endl;
+    //std::cout << "Bigram set size: " << (*bigramSet)->size() <<std::endl;
     
     t = clock() - t;
     
-    std::cout<<"time to load bigram set for "<<first<<": "<<
-        ((float)t)/CLOCKS_PER_SEC<<std::endl;
+    //std::cout<<"time to load bigram set for "<<first<<": "<<
+        //((float)t)/CLOCKS_PER_SEC<<std::endl;
     
     /*std::locale loc;
     std::string lf = std::tolower(first, loc);
@@ -323,16 +323,16 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         cv.wait(ul, [&]{ return threadsRunning == 0;});
         //std::cout<<"h"<<std::endl;
     }
-    //std::cout<<"a2 "<<std::endl;
+    std::cout<<"Finished Viterbi. Starting bigram check."<<std::endl;
     std::list<std::string> results = std::list<std::string>();
     
     std::vector<int> indices = std::vector<int>(n, 0);
     
     unwrap_string( &results, &indices);
     
-    std::unordered_map<std::string, std::unordered_map<std::string, int> *> 
-        bigramSets = std::unordered_map<std::string, 
-        std::unordered_map<std::string, int> *>();
+    /*
+    std::unordered_map<std::string, std::unordered_map<std::string, int> *>
+        bigramSets;
     
     std::list<std::vector<int>> indices_list = std::list<std::vector<int>>();
     //std::unordered_set<int> checked = std::unordered_set<int>();
@@ -355,21 +355,12 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
             key = key*storage_num + indices[i];
         }
         if (checked.count(key))
-            continue;*/
-        for (int i = 0; i < indices.size(); i++)
-        {
-            std::cout<<indices[i]<<" ";
-        }
-        std::cout<<std::endl;
+            continue;
         
         results = std::list<std::string>();
         unwrap_string( &results, &indices );
         
-        for (auto it = results.begin(); it != results.end(); ++it)
-        {
-            std::cout<<(*it)<<" ";
-        }
-        std::cout<<std::endl;
+        std::cout<<"Results size: "<<results.size()<<std::endl;
         
         if (results.empty())
             continue;
@@ -377,24 +368,27 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         std::list<std::string>::iterator it = --(--results.end());
         std::list<std::string>::iterator it2 = --results.end();
         bool bigrams_found = (results.size() > 1);
-        std::vector<int> new_indices = std::vector<int>(results.size(), 0);
+        std::vector<int> new_indices (indices.size() + 2, 0);
+        std::cout<<"Results size: "<<results.size()<<" NI size: "<<new_indices.size()<<std::endl;
         int offset = indices.size() - new_indices.size();
         for (int i = indices.size() - 1; (it2 != results.begin()) && (i >= 0);
             --it, --it2, --i)
         {
-            //std::cout<<"1 i "<<i<<std::endl;
+            std::cout<<"1 i "<<i<<" "<<new_indices.size()<<std::endl;
+            std::cout<<(*it)<<" "<<(*it2)<<std::endl;
             double score = scoreBigram( (*it), (*it2), corr, &bigramSets, db );
-            std::cout << "Bigram score for "<< (*it) << " " << (*it2) <<": "<<score<<std::endl;
-            //std::cout<<"2 "<<std::endl;
+            //std::cout << "Bigram score for "<< (*it) << " " << (*it2) <<": "<<score<<std::endl;
+            std::cout<<"2 "<<results.size()<<" "<<new_indices.size()<<std::endl;
             bigrams_found = bigrams_found && (score > 0);
-            //std::cout<<"3 "<<std::endl;
+            std::cout<<"3 "<<i<<" "<<offset<<" "<<new_indices.size()<<std::endl;
             new_indices[i - offset] = indices[i];
+            std::cout<<"4 "<<score<<std::endl;
             if (!score)
             {
                 std::cout<< "a" <<std::endl;
                 if (new_indices[i - offset] < storage_num - 1)
                 {
-                    std::cout<<"new indices size: "<<new_indices.size() << std::endl;
+                    //std::cout<<"new indices size: "<<new_indices.size() << std::endl;
                     new_indices[i - offset]++;
                     //int key = 0;
                     std::cout<< "a2" <<std::endl;
@@ -402,17 +396,17 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     {
                         key = key*storage_num + new_indices[j];
                         std::cout<<j<<" "<<new_indices.size()<<std::endl;
-                    }*/
-                    std::cout<< "a3" <<std::endl;
+                    }
+                    //std::cout<< "a3" <<std::endl;
                     //if (!checked.count(key))
                     {
-                        std::cout<< "a32" <<std::endl;
+                        //std::cout<< "a32" <<std::endl;
                         indices_list.push_back(new_indices);
-                        std::cout<< "a33" <<std::endl;
+                        //std::cout<< "a33" <<std::endl;
                         //checked.insert(key);
-                        std::cout<< "a34" <<std::endl;
+                        //std::cout<< "a34" <<std::endl;
                     }
-                    std::cout<< "a4" <<std::endl;
+                    std::cout<< "a3" <<std::endl;
                     new_indices[i - offset]--;
                 }
                 std::cout<< "b" <<std::endl;
@@ -424,7 +418,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     /*for (int j = 0; j < new_indices.size(); j++)
                     {
                         key = key*storage_num + new_indices[j];
-                    }*/
+                    }
                     //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
@@ -450,7 +444,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     for (int j = 0; j < new_indices.size(); j++)
                     {
                         key = key*storage_num + indices[j];
-                    }*/
+                    }
                     //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
@@ -466,7 +460,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
                     for (int j = 0; j < new_indices.size(); j++)
                     {
                         key = key*storage_num + indices[j];
-                    }*/
+                    }
                     //if (!checked.count(key))
                     {
                         indices_list.push_back(new_indices);
@@ -479,15 +473,15 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         }
         if (bigrams_found)
         {
-            std::cout<<"bigrams found"<<std::endl;
+            //std::cout<<"bigrams found"<<std::endl;
             t = clock() - t;
     
-            std::cout<<"time for Viterbi2: "<<
-                ((float)t)/CLOCKS_PER_SEC<<std::endl;
+            //std::cout<<"time for Viterbi2: "<<
+                //((float)t)/CLOCKS_PER_SEC<<std::endl;
                 
             return create_sequence(&results);
         }
-    }
+    }*/
     
     results = std::list<std::string>();
     
@@ -497,7 +491,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
     
     t = clock() - t;
 
-    std::cout<<"time for Viterbi2: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
+    //std::cout<<"time for Viterbi2: "<<((float)t)/CLOCKS_PER_SEC<<std::endl;
     
     return create_sequence(&results);
 }
