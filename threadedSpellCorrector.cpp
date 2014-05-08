@@ -55,7 +55,7 @@ int fillBigramList( std::list<dictEntry> ** bigramList, std::string first,
     
     if ((rc != SQLITE_DONE)&&(rc != SQLITE_OK))
     {
-        std::cout<<"Error reading bigram list "<<rc<<std::endl;
+        std::cerr<<"Error reading bigram list "<<rc<<std::endl;
     }
     
     (*bigramList)->sort();
@@ -323,7 +323,7 @@ std::string ViterbiWSA::Viterbi( std::string text, corrector * corr,
         cv.wait(ul, [&]{ return threadsRunning == 0;});
         //std::cout<<"h"<<std::endl;
     }
-    std::cout<<"Finished Viterbi. Starting bigram check."<<std::endl;
+    //std::cout<<"Finished Viterbi. Starting bigram check."<<std::endl;
     std::list<std::string> results = std::list<std::string>();
     
     std::vector<int> indices = std::vector<int>(n, 0);
@@ -585,7 +585,7 @@ std::string correct(std::string input, corrector * corr,
         entry e = wordList.front();
         if (e.d > -25) //TODO: find good threshold
         {
-            std::cout<<"score "<<e.d<<std::endl;
+            //std::cout<<"score "<<e.d<<std::endl;
             return e.str;
         }
         if (e.d > -30)
