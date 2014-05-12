@@ -26,7 +26,7 @@ int main()
     std::string tFile = "../Training/PrideAndPrejudice/tess2.txt";
     
     corr->loadDictionary("../Dictionary/unigrams.txt");
-    corr->loadErrors("../trained5.txt");
+    corr->loadErrors("../Dictionary/trained21.txt");
     //corr->learn(tFile, cFile);
     //std::cout<<"learned"<<std::endl;
     //corr->writeErrors("trained5.txt");
@@ -55,7 +55,7 @@ int main()
         
         
         output = correct(input, corr, first, db, &tpool);
-        std::cout<<"returned"<<std::endl;
+        //std::cout<<"returned"<<std::endl;
         std::cout<<output<<std::endl;
         
         /*output = Viterbi3( input, corr, db, 56000000, 50, 300);
